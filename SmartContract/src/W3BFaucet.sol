@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
 contract W3BFaucet {
@@ -6,7 +6,7 @@ contract W3BFaucet {
 uint256 public currentCohort;
 uint256 public tokenDailyLimit;
 address public Owner;
-bool paused;
+bool isPaused;
 struct individualData {
     uint256 LastReward;
     bool HasAccess;
@@ -15,7 +15,7 @@ mapping (uint256 => bool) public cohortStatus;
 mapping (uint256 => mapping(address => individualData)) public usersRecord;
 
 modifier notPaused() {
-    require (paused != true, "W3BFAUCET: ACTIVITIES ON HOLD");
+    require (isPaused != true, "W3BFAUCET: ACTIVITIES ON HOLD");
     _;
 }
 
@@ -30,12 +30,20 @@ modifier onlyValidUser() {
     _;
 }
 
+modifier onlyValid3rdParty(address _user) {
+    require(usersRecord[currentCohort][_user].HasAccess == true, "W3BFAUCET: INVALID USER");
+    require(block.timestamp >= usersRecord[currentCohort][_user].LastReward + 1 days, "W3BFAUCET: COOLDOWN PERIOD NOT ELASPED" );
+    _;
+}
+
 event newCohortSet(uint256 oldCohort, uint256 newCohort);
 event ownershipTransfered(address oldOwner, address newOwner);
+event contractPaused(address owner);
 event studentsRegistered(uint256 cohortRegistered);
-event withdrawalByAdmin(address admin, uint256 amountWithdrawn);
+event withdrawalByAdmin(address owner, uint256 amountWithdrawn);
 event mintSuccessful(address user, uint256 amount);
 event dailyLimitChanged(address owner, uint256 amount);
+event mintForSuccessful(address minter, address receiver, uint amount);
 
 constructor(uint256 _tokenDailyLimit) {
     Owner = msg.sender;
@@ -60,6 +68,12 @@ function changeDailyLimit(uint256 _Amount) external onlyOwner {
     emit dailyLimitChanged(Owner, _Amount);
 }
 
+function pauseContract() external onlyOwner { 
+    require(isPaused == false, "W3BFAUCET: CONTRACT ALREADY PAUSED");
+    isPaused = true;
+    emit contractPaused(Owner);
+}
+
 function registerUsers(address[] memory _user, uint _cohort) external onlyOwner {
     for(uint i; i < _user.length; i++) {
         if (_user[i] != address(0) && usersRecord[_cohort][_user[i]].HasAccess != true) {
@@ -71,14 +85,14 @@ function registerUsers(address[] memory _user, uint _cohort) external onlyOwner 
     emit studentsRegistered(_cohort);
 }
 
-function adminWithdrawal(uint _amount) external onlyOwner{
+function adminWithdrawal(uint _amount) external onlyOwner {
     require(address(this).balance >= _amount, "W3BFAUCET: INSUFFICIENT FUNDS" );
     (bool status, ) = payable(msg.sender).call{value: _amount}("");
     require(status, "W3BFAUCET: TRANSACTION FAILED");
     emit withdrawalByAdmin(msg.sender, _amount);
 }
 
-function mintToken() external onlyValidUser notPaused{
+function mintToken() external onlyValidUser notPaused {
     usersRecord[currentCohort][msg.sender].LastReward = block.timestamp;
     uint256 mintAmount = (tokenDailyLimit * 1 ether) / 1000;
     (bool status, ) = payable(msg.sender).call{value: mintAmount}("");
@@ -86,7 +100,13 @@ function mintToken() external onlyValidUser notPaused{
     emit mintSuccessful(msg.sender, mintAmount);
 }
 
-
+function mintForUser(address _user) external onlyValid3rdParty(_user) notPaused {
+    usersRecord[currentCohort][_user].LastReward = block.timestamp;
+    uint256 mintAmount = (tokenDailyLimit * 1 ether) / 1000;
+    (bool status, ) = payable(_user).call{value: mintAmount}("");
+    require(status, "W3BFAUCET: TRANSACTION FAILED");
+    emit mintForSuccessful(msg.sender, _user, mintAmount);
+}
 
 receive() external payable{}
 

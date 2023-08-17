@@ -2,14 +2,14 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {Counter} from "../src/Counter.sol";
+import {W3BFaucet} from "../src/W3BFaucet.sol";
 
-contract CounterTest is Test {
-    Counter public counter;
+contract W3BFaucetTest is Test {
+    W3BFaucet public w3BFaucet;
 
     function setUp() public {
-        counter = new Counter();
-        counter.setNumber(0);
+        address admin = 0xA771E1625DD4FAa2Ff0a41FA119Eb9644c9A46C8;
+        w3BFaucet = new W3BFaucet(20);
     }
 
     function testIncrement() public {
